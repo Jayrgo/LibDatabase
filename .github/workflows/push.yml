@@ -1,0 +1,83 @@
+name: Push
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set environment variables
+        run: |
+          echo "NAME=LibDatabase" >> $GITHUB_ENV
+          echo "INTERFACE_RETAIL=90001" >> $GITHUB_ENV
+          echo "INTERFACE_CLASSIC=11305" >> $GITHUB_ENV
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: luacheck
+        uses: Jayrgo/luacheck-action@v1
+      - name: Create changelog
+        uses: TriPSs/conventional-changelog-action@v3
+        id: changelog
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          preset: conventionalcommits
+          release-count: 1
+          skip-version-file: true
+          pre-commit: .pre-commit.js
+      - name: Create release
+        uses: actions/create-release@v1
+        id: release
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag }}
+          release_name: ${{ steps.changelog.outputs.tag }}
+          body: ${{ steps.changelog.outputs.clean_changelog }}
+      - name: "[retail] Create archive"
+        run: |
+          echo "$(tail -n +2 ${{ env.NAME }}.toc)" > ${{ env.NAME }}.toc
+          echo '## Interface: ${{ env.INTERFACE_RETAIL }}'$'\n'"$( cat ${{ env.NAME }}.toc)" > ${{ env.NAME }}.toc
+          git add ${{ env.NAME }}.toc
+          git commit -m "chore: Release"
+          git archive -o "${{ env.NAME }}-${{ steps.changelog.outputs.tag }}.zip" --prefix "${{ env.NAME }}/" HEAD
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+      - name: "[retail] Upload archive"
+        uses: actions/upload-release-asset@v1
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.release.outputs.upload_url }}
+          asset_path: "${{ env.NAME }}-${{ steps.changelog.outputs.tag }}.zip"
+          asset_name: "${{ env.NAME }}-${{ steps.changelog.outputs.tag }}.zip"
+          asset_content_type: application/zip
+      - name: "[retail] Delete archive"
+        run: |
+          rm "${{ env.NAME }}-${{ steps.changelog.outputs.tag }}.zip"
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+      - name: "[classic] Create archive"
+        run: |
+          echo "$(tail -n +2 ${{ env.NAME }}.toc)" > ${{ env.NAME }}.toc
+          echo '## Interface: ${{ env.INTERFACE_CLASSIC }}'$'\n'"$( cat ${{ env.NAME }}.toc)" > ${{ env.NAME }}.toc
+          git add ${{ env.NAME }}.toc
+          git commit -m "chore: Release"
+          git archive -o "${{ env.NAME }}-${{ steps.changelog.outputs.tag }}-classic.zip" --prefix "${{ env.NAME }}/" HEAD
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+      - name: "[classic] Upload archive"
+        uses: actions/upload-release-asset@v1
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.release.outputs.upload_url }}
+          asset_path: "${{ env.NAME }}-${{ steps.changelog.outputs.tag }}-classic.zip"
+          asset_name: "${{ env.NAME }}-${{ steps.changelog.outputs.tag }}-classic.zip"
+          asset_content_type: application/zip
+      - name: "[classic] Delete archive"
+        run: |
+          rm "${{ env.NAME }}-${{ steps.changelog.outputs.tag }}-classic.zip"
+        if: ${{ steps.changelog.outputs.skipped == 'false' }}

@@ -1,0 +1,6 @@
+# Interface: 
+## Title: LibDatabase |cffbebebeby Jayrgo|r
+## Author: Jayrgo
+## Version: 1.0.0
+
+LibDatabase.lua
